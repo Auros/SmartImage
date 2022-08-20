@@ -76,3 +76,9 @@ crashlytics-build.properties
 # Rider
 **/.idea/*
 **/.idea.meta
+
+# Specific Unity Projects
+SmartImage/[Ll]ogs
+SmartImage/[Tt]emp
+SmartImage/[Ll]ibrary
+SmartImage/[Uu]serSettings
