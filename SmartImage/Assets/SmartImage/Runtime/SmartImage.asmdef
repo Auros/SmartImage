@@ -1,12 +1,16 @@
 {
     "name": "SmartImage",
     "rootNamespace": "SmartImage",
-    "references": [],
+    "references": [
+        "GUID:f51ebe6a0ceec4240a699833d6309b23"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,
-    "precompiledReferences": [],
+    "precompiledReferences": [
+        "SixLabors.ImageSharp.dll"
+    ],
     "autoReferenced": true,
     "defineConstraints": [],
     "versionDefines": [],

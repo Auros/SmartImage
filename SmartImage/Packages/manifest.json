@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "com.cysharp.unitask": "2.3.1",
     "com.unity.collab-proxy": "1.17.1",
     "com.unity.feature.development": "1.0.1",
     "com.unity.ide.rider": "3.0.15",
@@ -40,6 +41,23 @@
     "com.unity.modules.video": "1.0.0",
     "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
-    "com.unity.modules.xr": "1.0.0"
-  }
+    "com.unity.modules.xr": "1.0.0",
+    "org.nuget.sixlabors.imagesharp": "2.1.3"
+  },
+  "scopedRegistries": [
+    {
+      "name": "package.openupm.com",
+      "url": "https://package.openupm.com",
+      "scopes": [
+        "com.cysharp.unitask",
+        "com.openupm",
+        "org.nuget.sixlabors.imagesharp",
+        "org.nuget.system.buffers",
+        "org.nuget.system.memory",
+        "org.nuget.system.numerics.vectors",
+        "org.nuget.system.runtime.compilerservices.unsafe",
+        "org.nuget.system.text.encoding.codepages"
+      ]
+    }
+  ]
 }
