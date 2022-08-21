@@ -78,7 +78,10 @@ crashlytics-build.properties
 **/.idea.meta
 
 # Specific Unity Projects
+SmartImage/[Oo]bj
 SmartImage/[Ll]ogs
 SmartImage/[Tt]emp
+SmartImage/[Bb]uild
+SmartImage/[Bb]uilds
 SmartImage/[Ll]ibrary
 SmartImage/[Uu]serSettings
