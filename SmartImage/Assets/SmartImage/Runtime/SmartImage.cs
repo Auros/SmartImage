@@ -11,10 +11,10 @@ namespace SmartImage
         private Image _image = null!;
         
         [SerializeField]
-        private string _source;
+        private string _source = null!;
 
         [SerializeField]
-        private SmartImageManager _smartImageManager;
+        private SmartImageManager _smartImageManager = null!;
 
         private SmartSprite? _sprite;
         
@@ -23,6 +23,7 @@ namespace SmartImage
             _image = GetComponent<Image>();
         }
 
+        // ReSharper disable once UnusedMember.Local (UniTask will call this method!)
         private async UniTaskVoid Start()
         {
             await UniTask.SwitchToThreadPool();
