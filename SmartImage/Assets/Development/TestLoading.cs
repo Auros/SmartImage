@@ -25,7 +25,7 @@ namespace SmartImage.Develop
             //await UniTask.SwitchToMainThread();
             //print(smartTexture);
 
-            var allImages = new DirectoryInfo(@"C:\Users\Auros\Desktop").GetFiles("*.png", SearchOption.AllDirectories);
+            var allImages = new DirectoryInfo(@"C:\Users\Auros\Desktop").GetFiles("*.gif", SearchOption.AllDirectories);
             
             foreach (var img in _images)
             {
