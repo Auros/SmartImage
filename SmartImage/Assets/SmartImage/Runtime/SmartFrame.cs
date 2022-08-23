@@ -1,14 +1,16 @@
-﻿namespace SmartImage
+﻿using UnityEngine;
+
+namespace SmartImage
 {
-    public class SmartFrame<T>
+    public class SmartFrame
     {
-        public T Value { get; internal set; }
+        public Sprite Sprite { get; internal set; } = null!;
+
+        public Texture2D Texture { get; internal set; } = null!;
         
         /// <summary>
-        /// Delay for this frame, in milliseconds.
+        /// Delay for this frame, in seconds.
         /// </summary>
         internal float Delay { get; set; }
-        
-        internal bool IsValid { get; set; }
     }
 }

@@ -13,7 +13,7 @@ namespace SmartImage.Develop
         private string _source = string.Empty;
 
         [SerializeField]
-        private Image _image;
+        private Image _image = null!;
         
         private async UniTaskVoid Start()
         {
@@ -21,8 +21,9 @@ namespace SmartImage.Develop
             var smartTexture = await _smartImageManager.LoadAsync(_source);
             await UniTask.SwitchToMainThread();
             print(smartTexture);
-            
-            _image.sprite = Sprite.Create(smartTexture.Active, new Rect(0, 0, smartTexture.Active.width, smartTexture.Active.height), Vector2.zero, 100);
+
+            _image.sprite = smartTexture!.Active.Sprite;
+            smartTexture.AddListener(frame => _image.sprite = frame.Sprite);
         }
     }
 }

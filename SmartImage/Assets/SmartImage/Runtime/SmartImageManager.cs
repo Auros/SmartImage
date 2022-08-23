@@ -1,5 +1,4 @@
 using System;
-using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -7,10 +6,10 @@ using Cysharp.Threading.Tasks;
 using JetBrains.Annotations;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using SmartImage.Internal;
 using SmartImage.Sources;
 using UnityEngine;
 using UnityEngine.Pool;
-using Color = UnityEngine.Color;
 using Debug = UnityEngine.Debug;
 
 namespace SmartImage
@@ -19,56 +18,74 @@ namespace SmartImage
     {
         [SerializeField, Tooltip("The time in milliseconds that this instance can take to build textures and sprites this frame.")]
         private float _incrementalLimit = 5f;
+
+        [SerializeField]
+        private SmartImageAnimationController? _animationController;
         
         [SerializeField]
         private MonoSourceStreamBuilder[] _sources = Array.Empty<MonoSourceStreamBuilder>();
-
+        
         private readonly SemaphoreSlim _semaphore = new(1);
         private static readonly ImageLoadingOptions _defaultOptions = new();
 
         private readonly Stopwatch _stopwatch = new();
-        private readonly Dictionary<int, SmartTexture> _textures = new();
-        private readonly List<SmartTextureConstruction> _texturesToBuild = new();
+        private readonly Dictionary<int, SmartSprite> _sprites = new();
+        private readonly List<SmartConstruction> _currentlyBuilding = new();
 
-        [PublicAPI]
-        public UniTask<SmartTexture?> LoadAsync(string source) => LoadAsync(source, null, default);
+        private readonly Queue<Action> _taskQueue = new();
         
         [PublicAPI]
-        public UniTask<SmartTexture?> LoadAsync(string source, CancellationToken token) => LoadAsync(source, null, token);
+        public UniTask<SmartSprite?> LoadAsync(string source) => LoadAsync(source, null, default);
         
         [PublicAPI]
-        public UniTask<SmartTexture?> LoadAsync(string source, ImageLoadingOptions options) => LoadAsync(source, options, default);
+        public UniTask<SmartSprite?> LoadAsync(string source, CancellationToken token) => LoadAsync(source, null, token);
         
         [PublicAPI]
-        public async UniTask<SmartTexture?> LoadAsync(string source, ImageLoadingOptions? options, CancellationToken token)
+        public UniTask<SmartSprite?> LoadAsync(string source, ImageLoadingOptions options) => LoadAsync(source, options, default);
+        
+        [PublicAPI]
+        public async UniTask<SmartSprite?> LoadAsync(string source, ImageLoadingOptions? options, CancellationToken token)
         {
             options ??= _defaultOptions;
 
             // Build a unique hash to handle caching.
             var id = source.GetHashCode() ^ options.GetHashCode();
 
-            bool inCache = false;
+            // As this method is designed with multithreading in mind, we make sure only one thread can read the dictionary
+            // at once. I could use a ConcurrentDictionary, but I don't want a SmartSprite to be "lost" if one of the same
+            // key was added first.
             await _semaphore.WaitAsync(token);
-            if (_textures.TryGetValue(id, out var smartTexture))
+            
+            // If the sprite is already in the cache, and it's valid, return it.
+            if (_sprites.TryGetValue(id, out var smartSprite) && smartSprite.State == MediaState.Valid)
+                return smartSprite;
+            
+            // Later we want to check if this caller was the one that created the sprite.
+            bool createdNewSprite = false;
+    
+            // If there was no sprite at all in the cache, create a new one, set it as loading, and add it to the cache.
+            if (smartSprite == null)
             {
-                inCache = true;
-                if (!smartTexture.IsLoading && smartTexture.IsValid)
-                    return smartTexture;
-            }
-            else
-            {
-                smartTexture = new SmartTexture { IsLoading = true };
-                _textures.Add(id, smartTexture);
-            }
-            _semaphore.Release();
-
-            // If the texture from the cache is already being loaded.
-            if (inCache && smartTexture.IsLoading)
-            {
-                await UniTask.WaitUntil(() => smartTexture.IsLoading, PlayerLoopTiming.Update, token);
-                return smartTexture.IsValid ? smartTexture : null;
+                createdNewSprite = true;
+                smartSprite = new SmartSprite { State = MediaState.Loading };
+                _sprites.Add(id, smartSprite);
             }
             
+            // Exit this locker
+            _semaphore.Release();
+
+            // Checks to see if we created the sprite, and if not, just wait
+            // until the that handler finishes building (or failed) the sprite.
+            if (!createdNewSprite)
+            {
+                // Wait every frame until the sprite isn't loading
+                await UniTask.WaitUntil(() => smartSprite.State is not MediaState.Loading, PlayerLoopTiming.Update, token);
+                
+                // If the sprite's state is now valid (sprite is ready), we return it. If not, we return null.
+                return smartSprite.State is MediaState.Valid ? smartSprite : null;
+            }
+            
+            // Now we try to get the image source.
             ISourceStreamBuilder? sourceStreamBuilder = null;
             foreach (var builder in _sources)
             {
@@ -98,29 +115,101 @@ namespace SmartImage
                 return null;
             }
 
-            var pool = ListPool<ImageFrameConstructionInfo>.Get();
+            var pool = ListPool<SmartFrameConstruction>.Get();
             var frames = (image.Frames as ImageFrameCollection<RgbaVector>)!;
             for (int i = 0; i < image.Frames.Count; i++)
             {
                 var frame = frames[i];
-                ImageFrameConstructionInfo frameConstruct = new();
-                frameConstruct.Init(frame);
+                SmartFrameConstruction frameConstruct = new(frame);
                 pool.Add(frameConstruct);
             }
+            
+            // After this point, we've copied all the data from the ImageSharp frames, so we can dispose it.
+            image.Dispose();
 
             await _semaphore.WaitAsync(token);
-            _texturesToBuild.Add(new SmartTextureConstruction(smartTexture, pool, options, token));
+
+            var construction = new SmartConstruction(smartSprite, pool, options, token);
+
+            for (int i = 0; i < construction.Frames.Count; i++)
+            {
+                var index = i;
+                _taskQueue.Enqueue(() =>
+                {
+                    if (construction.Sprite.State == MediaState.Invalid)
+                        return;
+
+                    // If the sprite building wants to be cancelled...
+                    if (construction.Token.IsCancellationRequested)
+                    {
+                        // First, set the state to invalid so more frames cannot be built.
+                        construction.Sprite.State = MediaState.Invalid;
+
+                        // Remove it from the cache.
+                        _sprites.Remove(id);
+                        
+                        // Then add the deletion of each frame to the scheduler.
+                        foreach (var alreadyBuiltFrame in construction.Sprite.Frames)
+                        {
+                            _taskQueue.Enqueue(() =>
+                            {
+                                DestroyImmediate(alreadyBuiltFrame.Sprite);
+                                DestroyImmediate(alreadyBuiltFrame.Texture);
+                            });
+                        }
+                    }
+                    
+                    var frame = construction.Frames[index];
+                    
+                    Texture2D tex = new(frame.Width, frame.Height);
+
+                    tex.SetPixels32(frame.Pixels);
+                    tex.wrapMode = TextureWrapMode.Clamp;
+                    tex.Apply();
+
+                    var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.zero, 10, 0, SpriteMeshType.FullRect);
+                    var smartFrame = smartSprite.Frames[index] = new SmartFrame
+                    {
+                        Texture = tex,
+                        Sprite = sprite,
+                        Delay = frame.Delay
+                    };
+                    frame.Dispose();
+                    construction.FramesBuilt++;
+
+                    if (index == 0)
+                        construction.Sprite.Active = smartFrame;
+
+                    if (construction.Frames.Count != construction.FramesBuilt)
+                        return;
+                    
+                    construction.Sprite.State = MediaState.Valid;
+                    _currentlyBuilding.Remove(construction);
+                });
+            }
+            
+            _currentlyBuilding.Add(construction);
             _semaphore.Release();
 
-            await UniTask.WaitUntil(() => !smartTexture.IsLoading, cancellationToken: token);
-            image.Dispose();
+            await UniTask.WaitUntil(() => smartSprite.State is not MediaState.Loading, cancellationToken: token);
             
-            return !smartTexture.IsValid ? null : smartTexture;
+            var finalSprite = smartSprite.State is MediaState.Valid ? smartSprite : null;
+            if (_animationController != null && finalSprite != null && finalSprite.Frames.Length > 1)
+                _animationController.Add(finalSprite);
+            return finalSprite;
         }
         
         private void Update()
         {
             _stopwatch.Start();
+
+            while (_incrementalLimit > _stopwatch.Elapsed.TotalMilliseconds && _taskQueue.TryDequeue(out var task))
+                task.Invoke();
+                
+            _stopwatch.Stop();
+            _stopwatch.Reset();
+            
+            /*_stopwatch.Start();
             var toRemove = ListPool<SmartTextureConstruction>.Get();
             foreach (var item in _texturesToBuild)
             {
@@ -188,75 +277,17 @@ namespace SmartImage
                 construct.Texture.IsValid = true;
             }
             
-            ListPool<SmartTextureConstruction>.Release(toRemove);
+            ListPool<SmartTextureConstruction>.Release(toRemove);*/
         }
 
-        private class SmartTextureConstruction
+        private void OnDestroy()
         {
-            public SmartTexture Texture { get; }
-            public CancellationToken Token { get; }
-            public ImageLoadingOptions Options { get; }
-            public List<ImageFrameConstructionInfo> Frames { get; }
+            if (_animationController == null)
+                return;
             
-            public Color32[] Copier { get; }
-            public int Cursor { get; set; }
-            
-            public SmartTextureConstruction(SmartTexture texture, List<ImageFrameConstructionInfo> frames, ImageLoadingOptions options, CancellationToken token)
-            {
-                Token = token;
-                Frames = frames;
-                Options = options;
-                Texture = texture;
-
-                Copier = new Color32[frames[0].Width * frames[0].Height];
-                texture.Frames = new SmartFrame<Texture2D>[frames.Count];
-            }
-
-            public void Dispose()
-            {
-                ListPool<ImageFrameConstructionInfo>.Release(Frames);
-            }
-        }
-
-        private class ImageFrameConstructionInfo
-        {
-            public Color32[] Pixels { get; private set; } = null!;
-            
-            public int Size { get; private set; }
-            public int Width { get; private set; }
-            public int Height { get; private set; }
-            
-            /// <summary>
-            /// The delay of this frame, in milliseconds.
-            /// </summary>
-            public int Delay { get; private set; }
-            
-            public bool TryBuild { get; set; }
-
-            public void Init(ImageFrame<RgbaVector> frame)
-            {
-                Width = frame.Width;
-                Height = frame.Height;
-                Size = Width * Height;
-                // Rent a color array that we'll use to store the pixel data for the image frame(s).
-                Pixels = ArrayPool<Color32>.Shared.Rent(Size);
-                for (int x = 0; x < frame.Width; x++)
-                    for (int y = 0; y < frame.Height; y++)
-                        Pixels[frame.Width * (frame.Height - y - 1) + x] = RgbaToColor(frame[x, y]);
-
-                var gif = frame.Metadata.GetGifMetadata();
-                Delay = gif.FrameDelay;
-
-                TryBuild = true;
-            }
-
-            private static Color RgbaToColor(RgbaVector vector) => new(vector.R, vector.G, vector.B, vector.A);
-            
-            public void Dispose()
-            {
-                ArrayPool<Color32>.Shared.Return(Pixels);
-                Pixels = null!;
-            }
+            foreach (var sprite in _sprites.Values)
+                if (sprite.Frames.Length > 1)
+                    _animationController.Remove(sprite);
         }
     }
 }
