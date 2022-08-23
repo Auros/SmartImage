@@ -29,7 +29,7 @@ namespace SmartImage
         private readonly Stopwatch _stopwatch = new();
         private readonly Dictionary<int, SmartTexture> _textures = new();
         private readonly List<SmartTextureConstruction> _texturesToBuild = new();
-        
+
         [PublicAPI]
         public UniTask<SmartTexture?> LoadAsync(string source) => LoadAsync(source, null, default);
         
@@ -137,14 +137,18 @@ namespace SmartImage
                     item.Cursor++;
                     var frame = item.Frames[i];
 
-                    if (frame.TryBuild)
+                    if (!frame.TryBuild)
                         continue;
 
                     triedToBuildAnything = true;
                     frame.TryBuild = false;
 
                     Texture2D tex = new(frame.Width, frame.Height);
-                    tex.SetPixels32(frame.Pixels);
+
+                    for (int c = 0; c < frame.Size; c++)
+                        item.Copier[c] = frame.Pixels[c];
+                    
+                    tex.SetPixels32(item.Copier);
                     tex.wrapMode = TextureWrapMode.Clamp;
                     tex.Apply();
                     
@@ -194,6 +198,7 @@ namespace SmartImage
             public ImageLoadingOptions Options { get; }
             public List<ImageFrameConstructionInfo> Frames { get; }
             
+            public Color32[] Copier { get; }
             public int Cursor { get; set; }
             
             public SmartTextureConstruction(SmartTexture texture, List<ImageFrameConstructionInfo> frames, ImageLoadingOptions options, CancellationToken token)
@@ -203,6 +208,7 @@ namespace SmartImage
                 Options = options;
                 Texture = texture;
 
+                Copier = new Color32[frames[0].Width * frames[0].Height];
                 texture.Frames = new SmartFrame<Texture2D>[frames.Count];
             }
 

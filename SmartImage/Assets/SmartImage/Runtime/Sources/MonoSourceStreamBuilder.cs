@@ -1,10 +1,9 @@
 using System.IO;
 using System.Threading;
 using Cysharp.Threading.Tasks;
-using SmartImage.Sources;
 using UnityEngine;
 
-namespace SmartImage
+namespace SmartImage.Sources
 {
     public abstract class MonoSourceStreamBuilder : MonoBehaviour, ISourceStreamBuilder
     {
