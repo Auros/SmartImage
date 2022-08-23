@@ -8,7 +8,8 @@
     "license": "MIT",
     "licensesUrl": "https://github.com/Auros/SmartImage/blob/main/LICENSE",
     "dependencies": {
-        "": ""
+        "com.cysharp.unitask": "2.3.1",
+        "org.nuget.sixlabors.imagesharp": "2.1.3"
     }
 
 }
