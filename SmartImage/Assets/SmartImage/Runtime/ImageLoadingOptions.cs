@@ -48,7 +48,7 @@ namespace SmartImage
         [PublicAPI]
         public ImageLoadingOptions WithSprites()
         {
-            DoNotBuildSprite = true;
+            DoNotBuildSprite = false;
             return this;
         }
 
@@ -59,7 +59,7 @@ namespace SmartImage
         [PublicAPI]
         public ImageLoadingOptions WithoutSprites()
         {
-            DoNotBuildSprite = false;
+            DoNotBuildSprite = true;
             return this;
         }
     }
