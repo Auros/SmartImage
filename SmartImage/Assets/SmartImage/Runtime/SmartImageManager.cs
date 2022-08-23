@@ -164,14 +164,14 @@ namespace SmartImage
                     Texture2D tex = new(frame.Width, frame.Height);
 
                     tex.SetPixels32(frame.Pixels);
-                    tex.wrapMode = TextureWrapMode.Clamp;
+                    tex.wrapMode = options.WrapMode;
                     tex.Apply();
 
-                    var sprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.zero, 10, 0, SpriteMeshType.FullRect);
+                    var sprite = options.DoNotBuildSprite ? null : Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.zero, 10, 0, options.MeshType);
                     var smartFrame = smartSprite.Frames[index] = new SmartFrame
                     {
                         Texture = tex,
-                        Sprite = sprite,
+                        Sprite = sprite!,
                         Delay = frame.Delay
                     };
                     frame.Dispose();
