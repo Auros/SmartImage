@@ -36,7 +36,7 @@ namespace SmartImage.Develop
                     var smartTexture = await _smartImageManager.LoadAsync(source);
                     await UniTask.SwitchToMainThread();
                     img.sprite = smartTexture!.Active.Sprite;
-                    smartTexture.AddListener(frame => img.sprite = frame.Sprite);
+                    smartTexture.AddListener((_, frame) => img.sprite = frame.Sprite);
                 });
 
             }
