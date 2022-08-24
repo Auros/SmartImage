@@ -1,3 +1,5 @@
+[![openupm](https://img.shields.io/npm/v/dev.auros.smartimage?label=openupm&registry_uri=https://package.openupm.com)](https://openupm.com/packages/dev.auros.smartimage/)
+
 # SmartImage
 A smarter way with dealing with images loaded at runtime in Unity. 
 
@@ -85,3 +87,8 @@ private async UniTaskVoid Start()
     sprite.AddListener((_, frame) => UpdateImage(frame));
 }
 ```
+
+## Installation
+I highly recommend you install via [OpenUPM](https://openupm.com)
+
+`openupm add dev.auros.smartimage`
