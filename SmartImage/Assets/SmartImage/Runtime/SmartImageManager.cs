@@ -150,13 +150,7 @@ namespace SmartImage
                         
                         // Then add the deletion of each frame to the scheduler.
                         foreach (var alreadyBuiltFrame in construction.Sprite.Frames)
-                        {
-                            _taskQueue.Enqueue(() =>
-                            {
-                                DestroyImmediate(alreadyBuiltFrame.Sprite);
-                                DestroyImmediate(alreadyBuiltFrame.Texture);
-                            });
-                        }
+                            _taskQueue.Enqueue(() => DestroyFrame(alreadyBuiltFrame, true));
                     }
                     
                     var frame = construction.Frames[index];
@@ -212,12 +206,43 @@ namespace SmartImage
 
         private void OnDestroy()
         {
-            if (_animationController == null)
-                return;
+            // Void all enqueued tasks (although this really isn't that necessary)
+            _taskQueue.Clear();
             
+            // We destroy all the sprites and textures we generated and have stored.
             foreach (var sprite in _sprites.Values)
-                if (sprite.Frames.Length > 1)
+            {
+                if (_animationController != null && sprite.Frames.Length > 1)
                     _animationController.Remove(sprite);
+
+                foreach (var frame in sprite.Frames)
+                    DestroyFrame(frame, false);
+            }
+
+            foreach (var currentlyBuilding in _currentlyBuilding)
+                foreach (var frame in currentlyBuilding.Sprite.Frames)
+                    DestroyFrame(frame, false);
+        }
+
+
+        private static void DestroyFrame(SmartFrame smartFrame, bool immediately)
+        {
+            if (immediately)
+            {
+                if (smartFrame.Sprite != null)
+                    DestroyImmediate(smartFrame.Sprite);
+            
+                if (smartFrame.Texture != null)
+                    DestroyImmediate(smartFrame.Texture);
+            }
+            else
+            {
+                if (smartFrame.Sprite != null)
+                    Destroy(smartFrame.Sprite);
+            
+                if (smartFrame.Texture != null)
+                    Destroy(smartFrame.Texture);
+            }
         }
     }
 }
