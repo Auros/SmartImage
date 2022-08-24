@@ -11,8 +11,8 @@ namespace SmartImage.Tests
         public IEnumerator LoadImageTestWithEnumeratorPasses() => UniTask.ToCoroutine(async () =>
         {
             var sim = TestHelpers.GetSIM();
-            
             var sprite = await sim.LoadAsync(TestHelpers.AurosGitHubProfilePictureUrl);
+            
             Assert.NotNull(sprite);
             Assert.NotNull(sprite.Active);
         });

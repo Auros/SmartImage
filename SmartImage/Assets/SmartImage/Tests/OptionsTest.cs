@@ -12,8 +12,8 @@ namespace SmartImage.Tests
         public IEnumerator DoNotBuildSprites() => UniTask.ToCoroutine(async () =>
         {
             var options = new ImageLoadingOptions().WithoutSprites();
-            
             var sim = TestHelpers.GetSIM();
+            
             var sprite = await sim.LoadAsync(TestHelpers.AurosGitHubProfilePictureUrl, options);
 
             Assert.IsNotNull(sprite);

@@ -12,7 +12,6 @@ namespace SmartImage.Tests
         public IEnumerator ImageFromCache() => UniTask.ToCoroutine(async () =>
         {
             var options = new ImageLoadingOptions().WithoutSprites();
-            
             var sim = TestHelpers.GetSIM();
             
             var sw = Stopwatch.StartNew();

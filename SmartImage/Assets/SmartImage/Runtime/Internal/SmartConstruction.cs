@@ -7,6 +7,7 @@ namespace SmartImage.Internal
 {
     internal class SmartConstruction : IDisposable
     {
+        public int Id { get; }
         public SmartSprite Sprite { get; }
         public CancellationToken Token { get; }
         public ImageLoadingOptions Options { get; }
@@ -14,8 +15,9 @@ namespace SmartImage.Internal
         
         public int FramesBuilt { get; set; }
         
-        public SmartConstruction(SmartSprite texture, List<SmartFrameConstruction> frames, ImageLoadingOptions options, CancellationToken token)
+        public SmartConstruction(int id, SmartSprite texture, List<SmartFrameConstruction> frames, ImageLoadingOptions options, CancellationToken token)
         {
+            Id = id;
             Token = token;
             Frames = frames;
             Options = options;
