@@ -233,6 +233,11 @@ namespace SmartImage
             // We destroy all the sprites and textures we generated and have stored.
             foreach (var sprite in _sprites.Values)
             {
+                // If the sprite was already destroyed for... some reason, or it hasn't finished loading, skip.
+                // ReSharper disable once ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+                if (sprite?.Frames == null)
+                    continue;
+                
                 if (_animationController != null && sprite.Frames.Length > 1)
                     _animationController.Remove(sprite);
 
