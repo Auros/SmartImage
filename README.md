@@ -40,7 +40,6 @@ to how [Unity's Incremental Garbage Collector](https://docs.unity3d.com/Manual/p
 * Caching
 
 ## Planned Features
-* Loading Indicator
 * Image Resizing
 
 ## Dependencies
@@ -73,7 +72,9 @@ This component is essential to loading SmartImages, as it manages the loading, s
 
 ![GIF Support](https://user-images.githubusercontent.com/41306347/186304262-d500c47a-2acc-4d3a-b854-85908125547e.gif)
 
-### Code Example
+### Code Examples
+
+#### Load an image programatically
 ```cs
 [SerializeField]
 private SmartImageManager _smartImageManager;
@@ -88,7 +89,26 @@ private async UniTaskVoid Start()
 }
 ```
 
+#### Add a loading indicator
+```cs
+[SerializeField]
+private SmartImageManager _smartImageManager;
+
+[SerializeField]
+private Sprite[] _loadingIndicatorFrames; 
+
+private void Awake()
+{
+    // Must be at least one sprite.
+    _smartImageManager.LoadingIndicator = SmartSprite.Create(_loadingIndicatorFrames, 0.5f);
+}
+```
+
 ## Installation
-I highly recommend you install via [OpenUPM](https://openupm.com)
+I highly recommend you install via [OpenUPM](https://openupm.com). It will automatically install the necessary dependencies.
+
+Install OpenUPM CLI from their website if you haven't already.
+
+Run this in the root of your Unity Project (Same folder that has the Assets folder).
 
 `openupm add dev.auros.smartimage`
