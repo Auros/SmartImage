@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
@@ -26,6 +27,8 @@ namespace SmartImage
         [SerializeField]
         private MonoSourceStreamBuilder[] _sources = Array.Empty<MonoSourceStreamBuilder>();
         
+        public SmartSprite? LoadingIndicator { get; set; }
+        
         private readonly SemaphoreSlim _semaphore = new(1);
         private static readonly ImageLoadingOptions _defaultOptions = new();
 
@@ -48,7 +51,7 @@ namespace SmartImage
         public async UniTask<SmartSprite?> LoadAsync(string source, ImageLoadingOptions? options, CancellationToken token)
         {
             options ??= _defaultOptions;
-
+            
             // Build a unique hash to handle caching.
             var id = source.GetHashCode() ^ options.GetHashCode();
             
@@ -67,20 +70,63 @@ namespace SmartImage
                 // Later we want to check if this caller was the one that created the sprite.
                 bool createdNewSprite = false;
 
+                var hasLoadingIndicator = LoadingIndicator?.State == MediaState.Valid;
+                
                 // If there was no sprite at all in the cache, create a new one, set it as loading, and add it to the cache.
                 if (smartSprite == null)
                 {
                     createdNewSprite = true;
                     smartSprite = new SmartSprite { State = MediaState.Loading };
+                    
+                    // If we have a loading indicator, assign it here.
+                    if (hasLoadingIndicator)
+                    {
+                        smartSprite.SetLoadingFrames(LoadingIndicator!.Frames);
+                        smartSprite.SetActiveFrame(0); // We can safely assume that we have at least one sprite.
+                        
+                        // If the loading indicator is animated, add it.
+                        await UniTask.SwitchToMainThread();
+                        if (_animationController != null && smartSprite.Frames.Length > 1)
+                            _animationController.Add(smartSprite);
+                        await UniTask.SwitchToThreadPool();
+                    }
+                    
                     _sprites.Add(id, smartSprite);
                 }
 
                 // Exit this locker
                 _semaphore.Release();
+                
+                var spriteBuildTask = BuildSprite(smartSprite, id, source, createdNewSprite, options, token);
 
-                // Checks to see if we created the sprite, and if not, just wait
+                // If a loading indicator has been not set, we can just await the task.
+                if (!hasLoadingIndicator)
+                    return await spriteBuildTask;
+                
+                // However, if we do have a loading indicator, we fire off the loading in the background
+                // and return the recently created sprite immediately.
+                _ = UniTask.RunOnThreadPool(() => spriteBuildTask, cancellationToken: token);
+                return smartSprite;
+
+            }
+            catch (Exception e)
+            {
+                _sprites.Remove(id);
+                _currentlyBuilding.RemoveAll(c => c.Id == id);
+                
+                if (e is TaskCanceledException)
+                    return null;
+                
+                Debug.LogError(e);
+            }
+            return null;
+        }
+
+        private async UniTask<SmartSprite?> BuildSprite(SmartSprite smartSprite, int id, string source, bool isNew, ImageLoadingOptions options, CancellationToken token)
+        {
+            // Checks to see if we created the sprite, and if not, just wait
                 // until the that handler finishes building (or failed) the sprite.
-                if (!createdNewSprite)
+                if (!isNew)
                 {
                     // Wait every frame until the sprite isn't loading
                     await UniTask.WaitUntil(() => smartSprite.State is not MediaState.Loading, PlayerLoopTiming.Update,
@@ -106,8 +152,7 @@ namespace SmartImage
                     return null;
 
                 await using var imageStream = await sourceStreamBuilder.GetStreamAsync(source, token);
-                if (imageStream ==
-                    null) // If the stream is null, that means the source builder failed to get the stream.
+                if (imageStream == null) // If the stream is null, that means the source builder failed to get the stream.
                     return null;
 
                 Image image;
@@ -169,14 +214,22 @@ namespace SmartImage
 
                         var sprite = options.DoNotBuildSprite
                             ? null
-                            : Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), Vector2.zero, 10, 0,
-                                options.MeshType);
-                        var smartFrame = smartSprite.Frames[index] = new SmartFrame
+                            : Sprite.Create(
+                                tex, 
+                                new Rect(0, 0, tex.width, tex.height),
+                                Vector2.zero, 
+                                10, 
+                                0,
+                                options.MeshType
+                            );
+                        
+                        var smartFrame = smartSprite.SetFrame(new SmartFrame
                         {
                             Texture = tex,
                             Sprite = sprite!,
                             Delay = frame.Delay
-                        };
+                        }, index);
+                        
                         frame.Dispose();
                         construction.FramesBuilt++;
 
@@ -199,19 +252,9 @@ namespace SmartImage
                 var finalSprite = smartSprite.State is MediaState.Valid ? smartSprite : null;
                 if (_animationController != null && finalSprite != null && finalSprite.Frames.Length > 1)
                     _animationController.Add(finalSprite);
-                return finalSprite;
-            }
-            catch (Exception e)
-            {
-                _sprites.Remove(id);
-                _currentlyBuilding.RemoveAll(c => c.Id == id);
                 
-                if (e is TaskCanceledException)
-                    return null;
-                
-                Debug.LogError(e);
-            }
-            return null;
+                finalSprite?.SetActiveFrame(0); // We can safely assume there's at least one sprite.
+                return finalSprite;    
         }
         
         private void Update()
@@ -241,6 +284,10 @@ namespace SmartImage
                 if (_animationController != null && sprite.Frames.Length > 1)
                     _animationController.Remove(sprite);
 
+                // Mark the sprite as invalid.
+                sprite.State = MediaState.Invalid;
+                
+                // Destroy all the contained frames.
                 foreach (var frame in sprite.Frames)
                     DestroyFrame(frame, false);
             }

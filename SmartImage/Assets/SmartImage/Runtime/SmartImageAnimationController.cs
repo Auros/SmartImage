@@ -46,7 +46,7 @@ namespace SmartImage
                 int newFrameIndex = ctx.CurrentFrame >= ctx.Sprite.Frames.Length - 1 ? 0 : ctx.CurrentFrame + 1;
 
                 ctx.CurrentFrame = newFrameIndex;
-                ctx.Sprite.SetNewFrame(newFrameIndex);
+                ctx.Sprite.SetActiveFrame(newFrameIndex);
                 ctx.TimeSinceLastUpdated = currentTime;
             }
         }

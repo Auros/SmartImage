@@ -15,11 +15,15 @@ namespace SmartImage
         [SerializeField]
         private SmartImageManager _smartImageManager = null!;
 
+        [SerializeField]
+        private bool _preserveAspect = true;
+        
         private SmartSprite? _sprite;
         
         private void Awake()
         {
             _image = GetComponent<Image>();
+            _image.preserveAspect = _preserveAspect;
         }
 
         // ReSharper disable once UnusedMember.Local (UniTask will call this method!)
