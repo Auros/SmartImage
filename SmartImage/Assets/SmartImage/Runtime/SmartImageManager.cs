@@ -57,7 +57,22 @@ namespace SmartImage
             
             try
             {
+                
+                // Now we try to get the image source.
+                ISourceStreamBuilder? sourceStreamBuilder = null;
+                foreach (var builder in _sources)
+                {
+                    if (!builder.IsSourceValid(source))
+                        continue;
 
+                    sourceStreamBuilder = builder;
+                    break;
+                }
+
+                // If the source to the image isn't valid, we immediately return.
+                if (sourceStreamBuilder == null)
+                    return null;
+                
                 // As this method is designed with multithreading in mind, we make sure only one thread can read the dictionary
                 // at once. I could use a ConcurrentDictionary, but I don't want a SmartSprite to be "lost" if one of the same
                 // key was added first.
@@ -97,7 +112,7 @@ namespace SmartImage
                 // Exit this locker
                 _semaphore.Release();
                 
-                var spriteBuildTask = BuildSprite(smartSprite, id, source, createdNewSprite, options, token);
+                var spriteBuildTask = BuildSprite(smartSprite, id, sourceStreamBuilder, source, createdNewSprite, options, token);
 
                 // If a loading indicator has been not set, we can just await the task.
                 if (!hasLoadingIndicator)
@@ -122,7 +137,7 @@ namespace SmartImage
             return null;
         }
 
-        private async UniTask<SmartSprite?> BuildSprite(SmartSprite smartSprite, int id, string source, bool isNew, ImageLoadingOptions options, CancellationToken token)
+        private async UniTask<SmartSprite?> BuildSprite(SmartSprite smartSprite, int id, ISourceStreamBuilder builder, string source, bool isNew, ImageLoadingOptions options, CancellationToken token)
         {
             // Checks to see if we created the sprite, and if not, just wait
                 // until the that handler finishes building (or failed) the sprite.
@@ -136,22 +151,8 @@ namespace SmartImage
                     return smartSprite.State is MediaState.Valid ? smartSprite : null;
                 }
 
-                // Now we try to get the image source.
-                ISourceStreamBuilder? sourceStreamBuilder = null;
-                foreach (var builder in _sources)
-                {
-                    if (!builder.IsSourceValid(source))
-                        continue;
-
-                    sourceStreamBuilder = builder;
-                    break;
-                }
-
-                // If the builder wasn't acquired earlier, we can't build the image.
-                if (sourceStreamBuilder == null)
-                    return null;
-
-                await using var imageStream = await sourceStreamBuilder.GetStreamAsync(source, token);
+                
+                await using var imageStream = await builder.GetStreamAsync(source, token);
                 if (imageStream == null) // If the stream is null, that means the source builder failed to get the stream.
                     return null;
 
@@ -298,8 +299,12 @@ namespace SmartImage
         }
 
 
-        private static void DestroyFrame(SmartFrame smartFrame, bool immediately)
+        private static void DestroyFrame(SmartFrame? smartFrame, bool immediately)
         {
+            // Nothing to destroy!
+            if (smartFrame == null)
+                return;
+        
             if (immediately)
             {
                 if (smartFrame.Sprite != null)
