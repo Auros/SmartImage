@@ -80,7 +80,10 @@ namespace SmartImage
 
                 // If the sprite is already in the cache, and it's valid, return it.
                 if (_sprites.TryGetValue(id, out var smartSprite) && smartSprite.State == MediaState.Valid)
+                {
+                    _semaphore.Release();
                     return smartSprite;
+                }
 
                 // Later we want to check if this caller was the one that created the sprite.
                 bool createdNewSprite = false;
@@ -128,6 +131,7 @@ namespace SmartImage
             {
                 _sprites.Remove(id);
                 _currentlyBuilding.RemoveAll(c => c.Id == id);
+                _semaphore.Release();
                 
                 if (e is TaskCanceledException)
                     return null;
